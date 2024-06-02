@@ -40,8 +40,8 @@ backgroundImage.src = 'background.png'; // Placeholder for the background tile
 const player = {
   x: 0,
   y: 0,
-  width: 90,
-  height: 90,
+  width: 52,
+  height: 83,
   health: 0,
   targetX: 0,
   maxHealth: 12,
@@ -65,11 +65,16 @@ const bonuses = [
 ];
 
 const items = [];
-const itemFrequency = 50; // Frequency of item generation
-const bonusFrequency = 200; // Increased bonus generation interval (1/4 of itemFrequency)
+const initialItemFrequency = 50; // Initial frequency of item generation
+const initialBonusFrequency = 400; // Initial frequency of bonus generation (50% less frequent)
+let itemFrequency = initialItemFrequency;
+let bonusFrequency = initialBonusFrequency;
 let frame = 0;
 let backgroundY = 0;
 let isGameOver = false;
+let itemSpeed = 2;
+let startTime = null;
+let elapsed = 0;
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -77,7 +82,7 @@ function resizeCanvas() {
   canvas.height = window.innerHeight * scale;
   ctx.scale(scale, scale);
   player.x = canvas.width / scale / 2 - player.width / 2;
-  player.y = canvas.height / scale - 200; // Move player up by about 150px
+  player.y = canvas.height / scale - 150; // Move player up by about 200px
   player.targetX = player.x;
 }
 
@@ -89,32 +94,43 @@ canvas.addEventListener('mousemove', (e) => {
   player.targetX = (e.clientX - rect.left) / rect.width * canvas.width / scale - player.width / 2;
 });
 
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  player.targetX = (touch.clientX - rect.left) / rect.width * canvas.width / scale - player.width / 2;
+}, { passive: false });
+
 function generateItem() {
-  if (frame % bonusFrequency === 0) {
+  if (frame % Math.round(bonusFrequency) === 0) {
     // Generate a bonus
     const itemType = bonuses[Math.floor(Math.random() * bonuses.length)];
     const x = Math.random() * (canvas.width / scale - 60);
     items.push({
       x: x,
       y: -60,
-      width: 60,
-      height: 60,
+      width: 64,
+      height: 64,
       value: itemType.value,
       image: itemType.image,
-      isHazard: false
+      isHazard: false,
+      angle: 0,
+      rotationSpeed: (Math.random() - 0.5) * 0.02 // Random slow spin
     });
-  } else {
+  } else if (frame % Math.round(itemFrequency) === 0) {
     // Generate a hazard
     const itemType = hazards[Math.floor(Math.random() * hazards.length)];
     const x = Math.random() * (canvas.width / scale - 60);
     items.push({
       x: x,
-      y: -60,
-      width: 60,
-      height: 60,
+      y: -64,
+      width: 64,
+      height: 64,
       value: itemType.value,
       image: itemType.image,
-      isHazard: true
+      isHazard: true,
+      angle: 0,
+      rotationSpeed: (Math.random() - 0.5) * 0.02 // Random slow spin
     });
   }
 }
@@ -124,7 +140,7 @@ function drawBackground() {
   ctx.drawImage(backgroundImage, 0, backgroundY, canvas.width / scale, patternHeight);
   ctx.drawImage(backgroundImage, 0, backgroundY - patternHeight, canvas.width / scale, patternHeight);
 
-  backgroundY += 2;
+  backgroundY += itemSpeed / 2;
   if (backgroundY >= patternHeight) {
     backgroundY = 0;
   }
@@ -140,19 +156,24 @@ function drawPlayer() {
 
 function drawItems() {
   items.forEach(item => {
-    ctx.drawImage(item.image, item.x, item.y, item.width, item.height);
+    ctx.save();
+    ctx.translate(item.x + item.width / 2, item.y + item.height / 2);
+    ctx.rotate(item.angle);
+    ctx.drawImage(item.image, -item.width / 2, -item.height / 2, item.width, item.height);
+    ctx.restore();
   });
 }
 
 function updateItems() {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    item.y += 2; // Item fall speed
+    item.y += itemSpeed; // Item fall speed
+    item.angle += item.rotationSpeed; // Item rotation
 
     // Check for collision with player
     if (checkCollision(player, item)) {
       if (item.isHazard) {
-        endGame('Game Over! You hit a hazard.');
+        endGame();
         return;
       } else {
         player.health = Math.min(player.health + item.value, player.maxHealth);
@@ -169,15 +190,61 @@ function updateItems() {
 }
 
 function checkCollision(player, item) {
-  const dx = (player.x + player.width / 2) - (item.x + item.width / 2);
-  const dy = (player.y + player.height / 2) - (item.y + item.height / 2);
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  // Get the four corners of the player's rotated hitbox
+  const playerCorners = getRotatedCorners(player);
+  // Get the four corners of the item's hitbox
+  const itemCorners = getRotatedCorners(item);
 
-  return distance < (player.width / 2 + item.width / 2);
+  // Check for collision using Separating Axis Theorem (SAT)
+  return isCollision(playerCorners, itemCorners);
+}
+
+function getRotatedCorners(rect) {
+  const angle = rect.angle * Math.PI / 180;
+  const sin = Math.sin(angle);
+  const cos = Math.cos(angle);
+
+  const halfWidth = rect.width / 2;
+  const halfHeight = rect.height / 2;
+
+  const cx = rect.x + halfWidth;
+  const cy = rect.y + halfHeight;
+
+  return [
+    { x: cx + (halfWidth * cos - halfHeight * sin), y: cy + (halfWidth * sin + halfHeight * cos) },
+    { x: cx + (-halfWidth * cos - halfHeight * sin), y: cy + (-halfWidth * sin + halfHeight * cos) },
+    { x: cx + (-halfWidth * cos + halfHeight * sin), y: cy + (-halfWidth * sin - halfHeight * cos) },
+    { x: cx + (halfWidth * cos + halfHeight * sin), y: cy + (halfWidth * sin - halfHeight * cos) }
+  ];
+}
+
+function isCollision(corners1, corners2) {
+  const axes = [
+    { x: corners1[1].x - corners1[0].x, y: corners1[1].y - corners1[0].y },
+    { x: corners1[2].x - corners1[1].x, y: corners1[2].y - corners1[1].y },
+    { x: corners2[1].x - corners2[0].x, y: corners2[1].y - corners2[0].y },
+    { x: corners2[2].x - corners2[1].x, y: corners2[2].y - corners2[1].y }
+  ];
+
+  for (let axis of axes) {
+    const projection1 = projectCorners(corners1, axis);
+    const projection2 = projectCorners(corners2, axis);
+
+    if (projection1.max < projection2.min || projection2.max < projection1.min) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function projectCorners(corners, axis) {
+  const projections = corners.map(corner => (corner.x * axis.x + corner.y * axis.y) / (axis.x * axis.x + axis.y * axis.y));
+  return { min: Math.min(...projections), max: Math.max(...projections) };
 }
 
 function updatePlayerPosition() {
-  const glideFactor = player.health * 0.005 + 0.025;
+  const glideFactor = player.health * 0.0025 + 0.0125;
   player.x += (player.targetX - player.x) * glideFactor;
 
   // Update player angle based on movement
@@ -186,12 +253,16 @@ function updatePlayerPosition() {
 }
 
 function drawHealthBar() {
-  const healthBarWidth = 200;
-  const healthBarHeight = 20;
+  const healthBarWidth = 300; 
+  const healthBarHeight = 32; 
   const healthBarX = 10;
-  const healthBarY = 10;
-  const healthPercentage = Math.max(player.health / player.maxHealth, 0.5 / player.maxHealth);
-  const cornerRadius = 10;
+  const healthBarY = 25;
+  const healthPercentage = Math.max(player.health / player.maxHealth, 1 / player.maxHealth);
+  const cornerRadius = 16;
+
+  // Draw shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+  ctx.shadowBlur = 30;
 
   // Draw health bar background
   ctx.fillStyle = 'white';
@@ -210,6 +281,8 @@ function drawHealthBar() {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+  ctx.shadowBlur = 0; // Reset shadow blur
 
   // Draw health bar empty (light gray)
   ctx.fillStyle = 'lightgray';
@@ -243,12 +316,27 @@ function drawHealthBar() {
 
   // Draw health bar text
   ctx.fillStyle = 'black';
-  ctx.font = 'bold 16px Arial';
+  ctx.font = 'bold 24px Arial'; // 50% bigger
   ctx.textAlign = 'left';
   ctx.strokeStyle = 'white';
   ctx.lineWidth = 3;
-  ctx.strokeText(`Health: ${player.health.toFixed(1)} ng/mL`, healthBarX, healthBarY + healthBarHeight + 16);
-  ctx.fillText(`Health: ${player.health.toFixed(1)} ng/mL`, healthBarX, healthBarY + healthBarHeight + 16);
+  ctx.strokeText(`Fentanyl level: ${player.health.toFixed(1)} ng/mL`, 10, 90); 
+  ctx.fillText(`Fentanyl level: ${player.health.toFixed(1)} ng/mL`, 10, 90);
+}
+
+function drawTimer() {
+  const timerX = 10;
+  const timerY = 130;
+  elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  // Draw timer text
+  ctx.fillStyle = 'black';
+  ctx.font = 'bold 24px Arial'; // 50% bigger
+  ctx.textAlign = 'left';
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 3;
+  ctx.strokeText(`Time: ${elapsed} s`, timerX, timerY);
+  ctx.fillText(`Time: ${elapsed} s`, timerX, timerY);
 }
 
 function update() {
@@ -259,26 +347,32 @@ function update() {
 
   drawBackground();
 
-  if (frame % itemFrequency === 0) {
-    generateItem();
-  }
+  generateItem();
 
   updatePlayerPosition();
   drawPlayer();
   updateItems();
   drawItems();
   drawHealthBar();
+  drawTimer();
 
   // Decrease health over time
-  player.health = Math.max(player.health - 0.005, 0);
+  player.health = Math.max(player.health - 0.006, 0);
+
+  // Increase item speed over time
+  itemSpeed += 0.002;
+
+  // Adjust item generation frequency
+  itemFrequency = initialItemFrequency / (itemSpeed / 2);
+  bonusFrequency = initialBonusFrequency / (itemSpeed / 2);
 
   frame++;
   requestAnimationFrame(update);
 }
 
-function endGame(message) {
+function endGame() {
   isGameOver = true;
-  document.getElementById('gameOverMessage').innerText = message;
+  document.getElementById('gameOverMessage').innerText = `Your epic fentanyl bender lasted for ${elapsed} glorious seconds before you got caught!`;
   document.getElementById('gameOver').style.display = 'block';
 }
 
@@ -288,7 +382,14 @@ function restartGame() {
   player.health = 0;
   items.length = 0;
   frame = 0;
+  itemSpeed = 2;
+  itemFrequency = initialItemFrequency;
+  bonusFrequency = initialBonusFrequency;
+  backgroundY = 0;
+  startTime = Date.now();
   update();
 }
 
+// Start the game and set the start time
+startTime = Date.now();
 update();

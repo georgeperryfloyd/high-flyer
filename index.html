@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vertical Scrolling Game</title>
+  <title>Fentanyl Floyd</title>
   <style>
     body {
       margin: 0;
@@ -30,10 +30,30 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      box-shadow: 8px 8px 30px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      color: black;
       padding: 20px;
       text-align: center;
+    }
+    #replayButton{
+        background-color: limegreen;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        padding: 12px 24px 12px 24px;
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0 0px 20px transparent;
+        transition: box-shadow .25s ease-in-out;
+    }
+    #replayButton:hover{
+        box-shadow: 0 0px 30px limegreen;
+        cursor: pointer;
     }
   </style>
 </head>
@@ -41,8 +61,9 @@
   <div id="gameContainer">
     <canvas id="gameCanvas"></canvas>
     <div id="gameOver">
-      <p id="gameOverMessage"></p>
-      <button onclick="restartGame()">Restart</button>
+        <h2>Busted!</h2>
+        <p id="gameOverMessage"></p>
+        <button id="replayButton" onclick="restartGame()">Play again</button>
     </div>
   </div>
   <script src="game.js"></script>
