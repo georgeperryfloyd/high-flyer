@@ -34,8 +34,8 @@ const bonusImages = [
   return img;
 });
 
-const backgroundImage = new Image();
-backgroundImage.src = 'background.png'; // Placeholder for the background tile
+const cloudImage = new Image();
+cloudImage.src = 'cloud.png'; // Placeholder for cloud sprite
 
 const player = {
   x: 0,
@@ -57,24 +57,31 @@ const hazards = [
 ];
 
 const bonuses = [
-  { value: 3, image: bonusImages[0] },
-  { value: 3, image: bonusImages[1] },
-  { value: 3, image: bonusImages[2] },
-  { value: 3, image: bonusImages[3] },
-  { value: 3, image: bonusImages[4] }
+  { value: 4, image: bonusImages[0] },
+  { value: 4, image: bonusImages[1] },
+  { value: 4, image: bonusImages[2] },
+  { value: 4, image: bonusImages[3] },
+  { value: 4, image: bonusImages[4] }
 ];
 
+const clouds = [];
+const cloudFrequency = 100; // Frequency of cloud generation (twice as frequent)
+
 const items = [];
-const initialItemFrequency = 50; // Initial frequency of item generation
-const initialBonusFrequency = 400; // Initial frequency of bonus generation (50% less frequent)
+const initialItemFrequency = 75; 
+const initialBonusFrequency = 300; 
 let itemFrequency = initialItemFrequency;
 let bonusFrequency = initialBonusFrequency;
 let frame = 0;
-let backgroundY = 0;
 let isGameOver = false;
 let itemSpeed = 2;
 let startTime = null;
 let elapsed = 0;
+
+const bgm = document.getElementById('bgm');
+const bonusSound = document.getElementById('bonusSound');
+
+bgm.play();
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -101,14 +108,28 @@ canvas.addEventListener('touchmove', (e) => {
   player.targetX = (touch.clientX - rect.left) / rect.width * canvas.width / scale - player.width / 2;
 }, { passive: false });
 
+function generateCloud() {
+  const size = 50 + Math.random() * 100; // Random size between 50 and 150
+  const x = Math.random() * canvas.width / scale - size / 2;
+  const opacity = 0.5 + Math.random() * 0.4; // Random opacity between 0.5 and 0.9
+  clouds.push({
+    x: x,
+    y: -size,
+    width: size,
+    height: size,
+    speed: itemSpeed / 2,
+    opacity: opacity
+  });
+}
+
 function generateItem() {
   if (frame % Math.round(bonusFrequency) === 0) {
     // Generate a bonus
     const itemType = bonuses[Math.floor(Math.random() * bonuses.length)];
-    const x = Math.random() * (canvas.width / scale - 60);
+    const x = Math.random() * canvas.width / scale - 32;
     items.push({
       x: x,
-      y: -60,
+      y: -64,
       width: 64,
       height: 64,
       value: itemType.value,
@@ -120,7 +141,7 @@ function generateItem() {
   } else if (frame % Math.round(itemFrequency) === 0) {
     // Generate a hazard
     const itemType = hazards[Math.floor(Math.random() * hazards.length)];
-    const x = Math.random() * (canvas.width / scale - 60);
+    const x = Math.random() * canvas.width / scale - 32;
     items.push({
       x: x,
       y: -64,
@@ -136,14 +157,14 @@ function generateItem() {
 }
 
 function drawBackground() {
-  const patternHeight = backgroundImage.height;
-  ctx.drawImage(backgroundImage, 0, backgroundY, canvas.width / scale, patternHeight);
-  ctx.drawImage(backgroundImage, 0, backgroundY - patternHeight, canvas.width / scale, patternHeight);
+  ctx.fillStyle = 'lightblue';
+  ctx.fillRect(0, 0, canvas.width / scale, canvas.height / scale);
 
-  backgroundY += itemSpeed / 2;
-  if (backgroundY >= patternHeight) {
-    backgroundY = 0;
-  }
+  clouds.forEach(cloud => {
+    ctx.globalAlpha = cloud.opacity;
+    ctx.drawImage(cloudImage, cloud.x, cloud.y, cloud.width, cloud.height);
+    ctx.globalAlpha = 1.0;
+  });
 }
 
 function drawPlayer() {
@@ -164,6 +185,18 @@ function drawItems() {
   });
 }
 
+function updateClouds() {
+  for (let i = clouds.length - 1; i >= 0; i--) {
+    const cloud = clouds[i];
+    cloud.y += cloud.speed;
+
+    // Remove clouds that are out of bounds
+    if (cloud.y > canvas.height / scale) {
+      clouds.splice(i, 1);
+    }
+  }
+}
+
 function updateItems() {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
@@ -177,6 +210,7 @@ function updateItems() {
         return;
       } else {
         player.health = Math.min(player.health + item.value, player.maxHealth);
+        bonusSound.play();
       }
       items.splice(i, 1);
       continue;
@@ -190,61 +224,18 @@ function updateItems() {
 }
 
 function checkCollision(player, item) {
-  // Get the four corners of the player's rotated hitbox
-  const playerCorners = getRotatedCorners(player);
-  // Get the four corners of the item's hitbox
-  const itemCorners = getRotatedCorners(item);
+  const playerRadius = Math.min(player.width, player.height) * 0.45; // Scale factor of 0.9 / 2
+  const itemRadius = Math.min(item.width, item.height) * 0.45; // Scale factor of 0.9 / 2
 
-  // Check for collision using Separating Axis Theorem (SAT)
-  return isCollision(playerCorners, itemCorners);
-}
+  const dx = (player.x + player.width / 2) - (item.x + item.width / 2);
+  const dy = (player.y + player.height / 2) - (item.y + item.height / 2);
+  const distance = Math.sqrt(dx * dx + dy * dy);
 
-function getRotatedCorners(rect) {
-  const angle = rect.angle * Math.PI / 180;
-  const sin = Math.sin(angle);
-  const cos = Math.cos(angle);
-
-  const halfWidth = rect.width / 2;
-  const halfHeight = rect.height / 2;
-
-  const cx = rect.x + halfWidth;
-  const cy = rect.y + halfHeight;
-
-  return [
-    { x: cx + (halfWidth * cos - halfHeight * sin), y: cy + (halfWidth * sin + halfHeight * cos) },
-    { x: cx + (-halfWidth * cos - halfHeight * sin), y: cy + (-halfWidth * sin + halfHeight * cos) },
-    { x: cx + (-halfWidth * cos + halfHeight * sin), y: cy + (-halfWidth * sin - halfHeight * cos) },
-    { x: cx + (halfWidth * cos + halfHeight * sin), y: cy + (halfWidth * sin - halfHeight * cos) }
-  ];
-}
-
-function isCollision(corners1, corners2) {
-  const axes = [
-    { x: corners1[1].x - corners1[0].x, y: corners1[1].y - corners1[0].y },
-    { x: corners1[2].x - corners1[1].x, y: corners1[2].y - corners1[1].y },
-    { x: corners2[1].x - corners2[0].x, y: corners2[1].y - corners2[0].y },
-    { x: corners2[2].x - corners2[1].x, y: corners2[2].y - corners2[1].y }
-  ];
-
-  for (let axis of axes) {
-    const projection1 = projectCorners(corners1, axis);
-    const projection2 = projectCorners(corners2, axis);
-
-    if (projection1.max < projection2.min || projection2.max < projection1.min) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function projectCorners(corners, axis) {
-  const projections = corners.map(corner => (corner.x * axis.x + corner.y * axis.y) / (axis.x * axis.x + axis.y * axis.y));
-  return { min: Math.min(...projections), max: Math.max(...projections) };
+  return distance < (playerRadius + itemRadius);
 }
 
 function updatePlayerPosition() {
-  const glideFactor = player.health * 0.0025 + 0.0125;
+  const glideFactor = player.health * 0.003 + 0.02;
   player.x += (player.targetX - player.x) * glideFactor;
 
   // Update player angle based on movement
@@ -345,10 +336,15 @@ function update() {
   // Clear the canvas for redrawing
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  if (frame % cloudFrequency === 0) {
+    generateCloud();
+  }
+
   drawBackground();
 
   generateItem();
 
+  updateClouds();
   updatePlayerPosition();
   drawPlayer();
   updateItems();
@@ -357,14 +353,14 @@ function update() {
   drawTimer();
 
   // Decrease health over time
-  player.health = Math.max(player.health - 0.006, 0);
+  player.health = Math.max(player.health - 0.01, 0);
 
   // Increase item speed over time
   itemSpeed += 0.002;
 
   // Adjust item generation frequency
   itemFrequency = initialItemFrequency / (itemSpeed / 2);
-  bonusFrequency = initialBonusFrequency / (itemSpeed / 2);
+  bonusFrequency = initialBonusFrequency / (itemSpeed / 4);
 
   frame++;
   requestAnimationFrame(update);
@@ -381,15 +377,49 @@ function restartGame() {
   document.getElementById('gameOver').style.display = 'none';
   player.health = 0;
   items.length = 0;
+  clouds.length = 0;
   frame = 0;
-  itemSpeed = 2;
+  itemSpeed = 3;
   itemFrequency = initialItemFrequency;
   bonusFrequency = initialBonusFrequency;
-  backgroundY = 0;
   startTime = Date.now();
+
+  // Generate initial clouds
+  for (let i = 0; i < 6; i++) {
+    const size = 100 + Math.random() * 200; // Random size between 50 and 150
+    const x = Math.random() * canvas.width / scale - size / 2;
+    const y = Math.random() * canvas.height / scale - size;
+    const opacity = 0.5 + Math.random() * 0.4; // Random opacity between 0.5 and 0.9
+    clouds.push({
+      x: x,
+      y: y,
+      width: size,
+      height: size,
+      speed: itemSpeed / 2,
+      opacity: opacity
+    });
+  }
+
   update();
 }
 
 // Start the game and set the start time
 startTime = Date.now();
+
+// Generate initial clouds
+for (let i = 0; i < 6; i++) {
+  const size = 100 + Math.random() * 200; // Random size between 50 and 150
+  const x = Math.random() * canvas.width / scale - size / 2;
+  const y = Math.random() * canvas.height / scale - size;
+  const opacity = 0.5 + Math.random() * 0.4; // Random opacity between 0.5 and 0.9
+  clouds.push({
+    x: x,
+    y: y,
+    width: size,
+    height: size,
+    speed: itemSpeed / 2,
+    opacity: opacity
+  });
+}
+
 update();

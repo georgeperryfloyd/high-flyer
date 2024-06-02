@@ -15,11 +15,11 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
-      background: #f0f0f0;
+      background: lightblue;
     }
     #gameCanvas {
       background: #f0f0f0;
-      border: 1px solid #000;
+      border: none;
       max-width: 500px;
       width: 100%;
       height: auto;
@@ -66,6 +66,8 @@
         <button id="replayButton" onclick="restartGame()">Play again</button>
     </div>
   </div>
+  <audio id="bgm" src="bgm.wav" loop></audio>
+  <audio id="bonusSound" src="bonus.wav"></audio>
   <script src="game.js"></script>
 </body>
 </html>
