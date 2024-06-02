@@ -89,7 +89,7 @@ function resizeCanvas() {
   canvas.height = window.innerHeight * scale;
   ctx.scale(scale, scale);
   player.x = canvas.width / scale / 2 - player.width / 2;
-  player.y = canvas.height / scale - 150; // Move player up by about 200px
+  player.y = canvas.height / scale - 250; // Move player up by about 200px
   player.targetX = player.x;
 }
 
