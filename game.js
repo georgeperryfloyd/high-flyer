@@ -235,7 +235,7 @@ function checkCollision(player, item) {
 }
 
 function updatePlayerPosition() {
-  const glideFactor = player.health * 0.003 + 0.02;
+  const glideFactor = player.health * 0.009 + 0.05;
   player.x += (player.targetX - player.x) * glideFactor;
 
   // Update player angle based on movement
