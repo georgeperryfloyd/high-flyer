@@ -2,10 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- prevent user from zooming in/out -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+  <!-- define a full-screen experience -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
+  <!-- set the status bar style -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- define the title of the web application -->
+  <meta name="apple-mobile-web-app-title" content="Fentanyl Floyd">
+
+  <!-- link to the icon image -->
+  <link rel="apple-touch-icon" href="touch-icon.png">
+
+  <!-- link to the favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <title>Fentanyl Floyd</title>
   <style>
     body {
+      background: lightblue;
       margin: 0;
       overflow: hidden;
       font-family: Arial, sans-serif;
@@ -15,7 +33,7 @@
       justify-content: center;
       align-items: center;
       height: 100vh;
-      background: lightblue;
+      background: white;
     }
     #gameCanvas {
       background: #f0f0f0;
@@ -27,8 +45,10 @@
     #gameOver {
       display: none;
       position: absolute;
-      top: 50%;
+      top: 40%;
       left: 50%;
+      max-width: 500px;
+      width: 100%;
       transform: translate(-50%, -50%);
       background: rgba(255, 255, 255, 0.8);
       border-radius: 16px;

@@ -65,23 +65,23 @@ const bonuses = [
 ];
 
 const clouds = [];
-const cloudFrequency = 100; // Frequency of cloud generation (twice as frequent)
+const cloudFrequency = 100; // Frequency of cloud generation
 
 const items = [];
 const initialItemFrequency = 75; 
 const initialBonusFrequency = 300; 
 let itemFrequency = initialItemFrequency;
 let bonusFrequency = initialBonusFrequency;
-let frame = 0;
 let isGameOver = false;
 let itemSpeed = 2;
 let startTime = null;
 let elapsed = 0;
+let lastTime = 0;
 
 const bgm = document.getElementById('bgm');
 const bonusSound = document.getElementById('bonusSound');
 
-bgm.play();
+//bgm.play(); - Disabled for now
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -123,7 +123,7 @@ function generateCloud() {
 }
 
 function generateItem() {
-  if (frame % Math.round(bonusFrequency) === 0) {
+  if (Math.random() < 1 / bonusFrequency) {
     // Generate a bonus
     const itemType = bonuses[Math.floor(Math.random() * bonuses.length)];
     const x = Math.random() * canvas.width / scale - 32;
@@ -138,7 +138,7 @@ function generateItem() {
       angle: 0,
       rotationSpeed: (Math.random() - 0.5) * 0.02 // Random slow spin
     });
-  } else if (frame % Math.round(itemFrequency) === 0) {
+  } else if (Math.random() < 1 / itemFrequency) {
     // Generate a hazard
     const itemType = hazards[Math.floor(Math.random() * hazards.length)];
     const x = Math.random() * canvas.width / scale - 32;
@@ -185,10 +185,10 @@ function drawItems() {
   });
 }
 
-function updateClouds() {
+function updateClouds(deltaTime) {
   for (let i = clouds.length - 1; i >= 0; i--) {
     const cloud = clouds[i];
-    cloud.y += cloud.speed;
+    cloud.y += cloud.speed * deltaTime / 16;
 
     // Remove clouds that are out of bounds
     if (cloud.y > canvas.height / scale) {
@@ -197,11 +197,11 @@ function updateClouds() {
   }
 }
 
-function updateItems() {
+function updateItems(deltaTime) {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    item.y += itemSpeed; // Item fall speed
-    item.angle += item.rotationSpeed; // Item rotation
+    item.y += itemSpeed * deltaTime / 16; // Item fall speed
+    item.angle += item.rotationSpeed * deltaTime / 16; // Item rotation
 
     // Check for collision with player
     if (checkCollision(player, item)) {
@@ -234,9 +234,9 @@ function checkCollision(player, item) {
   return distance < (playerRadius + itemRadius);
 }
 
-function updatePlayerPosition() {
-  const glideFactor = player.health * 0.009 + 0.05;
-  player.x += (player.targetX - player.x) * glideFactor;
+function updatePlayerPosition(deltaTime) {
+  const glideFactor = player.health * 0.007 + 0.03;
+  player.x += (player.targetX - player.x) * glideFactor * deltaTime / 16;
 
   // Update player angle based on movement
   const deltaX = player.targetX - player.x;
@@ -318,7 +318,8 @@ function drawHealthBar() {
 function drawTimer() {
   const timerX = 10;
   const timerY = 130;
-  elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  elapsed += lastTime / 1000;
+  lastTime = 0;
 
   // Draw timer text
   ctx.fillStyle = 'black';
@@ -326,17 +327,22 @@ function drawTimer() {
   ctx.textAlign = 'left';
   ctx.strokeStyle = 'white';
   ctx.lineWidth = 3;
-  ctx.strokeText(`Time: ${elapsed} s`, timerX, timerY);
-  ctx.fillText(`Time: ${elapsed} s`, timerX, timerY);
+  ctx.strokeText(`Time: ${elapsed.toFixed(1)} s`, timerX, timerY);
+  ctx.fillText(`Time: ${elapsed.toFixed(1)} s`, timerX, timerY);
 }
 
-function update() {
+function update(timestamp) {
   if (isGameOver) return; // Stop the game loop when the game is over
+
+  const deltaTime = timestamp - (startTime || timestamp);
+  startTime = timestamp;
+
+  lastTime = deltaTime;
 
   // Clear the canvas for redrawing
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (frame % cloudFrequency === 0) {
+  if (Math.random() < 1 / cloudFrequency) {
     generateCloud();
   }
 
@@ -344,31 +350,30 @@ function update() {
 
   generateItem();
 
-  updateClouds();
-  updatePlayerPosition();
+  updateClouds(deltaTime);
+  updatePlayerPosition(deltaTime);
   drawPlayer();
-  updateItems();
+  updateItems(deltaTime);
   drawItems();
   drawHealthBar();
   drawTimer();
 
   // Decrease health over time
-  player.health = Math.max(player.health - 0.01, 0);
+  player.health = Math.max(player.health - 0.01 * deltaTime / 16, 0);
 
   // Increase item speed over time
-  itemSpeed += 0.002;
+  itemSpeed += 0.002 * deltaTime / 16;
 
   // Adjust item generation frequency
   itemFrequency = initialItemFrequency / (itemSpeed / 2);
   bonusFrequency = initialBonusFrequency / (itemSpeed / 4);
 
-  frame++;
   requestAnimationFrame(update);
 }
 
 function endGame() {
   isGameOver = true;
-  document.getElementById('gameOverMessage').innerText = `Your epic fentanyl bender lasted for ${elapsed} glorious seconds before you got caught!`;
+  document.getElementById('gameOverMessage').innerText = `Your epic fentanyl bender lasted for ${elapsed.toFixed(1)} glorious seconds before you got caught!`;
   document.getElementById('gameOver').style.display = 'block';
 }
 
@@ -378,11 +383,12 @@ function restartGame() {
   player.health = 0;
   items.length = 0;
   clouds.length = 0;
-  frame = 0;
   itemSpeed = 3;
   itemFrequency = initialItemFrequency;
   bonusFrequency = initialBonusFrequency;
-  startTime = Date.now();
+  startTime = null;
+  elapsed = 0;
+  lastTime = 0;
 
   // Generate initial clouds
   for (let i = 0; i < 6; i++) {
@@ -400,26 +406,8 @@ function restartGame() {
     });
   }
 
-  update();
+  requestAnimationFrame(update);
 }
 
 // Start the game and set the start time
-startTime = Date.now();
-
-// Generate initial clouds
-for (let i = 0; i < 6; i++) {
-  const size = 100 + Math.random() * 200; // Random size between 50 and 150
-  const x = Math.random() * canvas.width / scale - size / 2;
-  const y = Math.random() * canvas.height / scale - size;
-  const opacity = 0.5 + Math.random() * 0.4; // Random opacity between 0.5 and 0.9
-  clouds.push({
-    x: x,
-    y: y,
-    width: size,
-    height: size,
-    speed: itemSpeed / 2,
-    opacity: opacity
-  });
-}
-
-update();
+restartGame();
